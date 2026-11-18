@@ -173,7 +173,7 @@ const PROCS = [
     after:['Пейте 2 л воды и больше 2–3 дня: так разрушенный жир выводится быстрее','Лучше всего в тот же день или назавтра сделать ЕМС или лимфодренаж','Вечером пройдитесь 30–40 минут быстрым шагом','2–3 дня без алкоголя, жирного и сладкого'],
     result:'Минус объём видно уже после 2–3 процедур' },
   { id:'krio', cat:'Крио', name:'Криолиполиз', ic:'❄️', short:'Холод убирает жировые ловушки за одну процедуру',
-    interval:45, course:'Одна процедура на зону, повтор через 1–2 месяца',
+    interval:30, course:'Раз в месяц, на каждую зону',
     before:['Не ешьте плотно за 2 часа до визита','Возьмите удобную одежду, процедура длится около часа'],
     after:['Покраснение, онемение и лёгкий отёк зоны — это нормально, проходят за 1–3 недели','Несколько дней делайте лёгкий массаж зоны по 5 минут','3–5 дней без бани, сауны и горячей ванны','Пейте больше воды и больше двигайтесь'],
     result:'Первый результат через 3–4 недели, полный через 2–3 месяца',
@@ -366,7 +366,7 @@ const TABS = [['home','Главная'],['water','Вода'],['prog','Прогр
 function renderTabs(){
   $('#tabbar').innerHTML = TABS.map(([k,t]) => `<button class="${page===k?'on':''}" onclick="go('${k}')">${ICON[k]}<span>${t}</span></button>`).join('');
 }
-function go(p, s){ haptic('sel'); page=p; sub=s||null; quiz=null; if(p!=='book') book=null; render(); window.scrollTo(0,0); }
+function go(p, s){ haptic('sel'); page=p; sub=s||null; quiz=null; recOpen=null; if(p!=='book') book=null; render(); window.scrollTo(0,0); }
 function setBack(on){ if(!tg||!tg.BackButton) return; try{ on ? tg.BackButton.show() : tg.BackButton.hide(); }catch(e){} }
 
 /* ============================== ГЛАВНАЯ ============================== */
@@ -439,7 +439,7 @@ function vHome(){
 function offerCard(o, btn, promo){
   const save = o.old && o.old > o.price ? o.old - o.price : 0;
   const k = btoa(unescape(encodeURIComponent(JSON.stringify({t:o.t,c:o.cat||'',p:!!promo}))));
-  return `<div class="card fade"><div class="row between" style="align-items:flex-start"><h3 style="flex:1;padding-right:8px">${esc(o.t)}</h3>${save?`<span class="pill lime">−${money(save)}</span>`:''}</div>
+  return `<div class="card fade">${!S.client&&o.s&&o.s!=='Обе'?`<span class="pill" style="margin-bottom:8px">📍 ${esc(o.s)}</span>`:''}<div class="row between" style="align-items:flex-start"><h3 style="flex:1;padding-right:8px">${esc(o.t)}</h3>${save?`<span class="pill lime">−${money(save)}</span>`:''}</div>
     ${o.d?`<div class="mute small" style="margin-top:4px">${esc(o.d)}</div>`:''}
     <div class="row between" style="margin-top:12px"><div style="white-space:nowrap">${o.price?`<b style="font-size:20px">${money(o.price)}</b>`:''}${o.old&&o.old>o.price?`<div class="dim small"><s>${money(o.old)}</s>${o.till?' · до '+short(o.till):''}</div>`:o.till?`<div class="xs dim">до ${short(o.till)}</div>`:''}</div>
     <button class="btn sm" style="width:auto;padding:0 18px;white-space:nowrap" onclick="takeOffer('${k}')">${btn}</button></div></div>`;
@@ -596,14 +596,117 @@ async function saveProg(kind){ const v=parseFloat($('#nval').value.replace(',','
   try{ await api('progress',{kind,v,day:t}); }catch(e){ toast('Нет связи, попробуйте позже'); } }
 
 /* ============================== ПИТАНИЕ ============================== */
+/* ---------- Рецепты и продукты (КБЖУ примерно, на порцию / на 100 г) ---------- */
+const RECIPES = [
+  { id:'omlet', e:'🍳', t:'Омлет с индейкой и шпинатом', tag:'Завтрак', min:10, k:420, p:43, f:25, c:5,
+    ing:['Яйца — 3 шт','Ветчина из индейки — 80 г','Шпинат — горсть (50 г)','Сыр — 20 г','Соль, перец'],
+    st:['Взбейте яйца с солью и перцем','Обжарьте индейку и шпинат 2 минуты на антипригарной сковороде','Залейте яйцами, посыпьте сыром, накройте крышкой на 4 минуты'] },
+  { id:'syrniki', e:'🥞', t:'Сырники в духовке без муки', tag:'Завтрак', min:30, k:390, p:42, f:15, c:22,
+    ing:['Творог 5% — 200 г','Яйцо — 1 шт','Рисовая или овсяная мука — 20 г','Ваниль, подсластитель по вкусу'],
+    st:['Смешайте всё в однородную массу','Сформируйте 5–6 сырников на пергаменте','Запекайте 20 минут при 180°C, подавайте с ягодами или йогуртом'] },
+  { id:'oat', e:'🥣', t:'Овсянка с йогуртом и ягодами', tag:'Завтрак', min:7, k:380, p:22, f:8, c:53,
+    ing:['Овсяные хлопья — 50 г','Молоко 1,5% — 200 мл','Греческий йогурт — 100 г','Ягоды — 80 г (можно замороженные)'],
+    st:['Сварите овсянку на молоке 4–5 минут','Сверху выложите йогурт и ягоды','Вечером можно залить хлопья молоком в банке и утром съесть холодной'] },
+  { id:'pancake', e:'🍌', t:'Банановые панкейки', tag:'Завтрак', min:15, k:380, p:20, f:12, c:45,
+    ing:['Банан — 1 шт','Яйца — 2 шт','Овсяная мука — 30 г','Корица, щепотка разрыхлителя'],
+    st:['Разомните банан вилкой и смешайте с яйцами и мукой','Жарьте небольшие панкейки на сухой антипригарной сковороде по 1–2 минуты с каждой стороны','Подавайте с греческим йогуртом'] },
+  { id:'teriyaki', e:'🍗', t:'Курица терияки с рисом', tag:'Обед и ужин', min:25, k:480, p:47, f:5, c:62,
+    ing:['Куриная грудка — 180 г','Рис — 60 г сухого','Соус терияки — 20 г','Брокколи или стручковая фасоль — 100 г','Кунжут'],
+    st:['Отварите рис','Нарежьте курицу кубиками и обжарьте 6–7 минут','Добавьте соус и овощи, потушите 3 минуты, посыпьте кунжутом'] },
+  { id:'burger', e:'🍔', t:'Домашний бургер', tag:'Обед и ужин', min:20, k:520, p:44, f:20, c:38,
+    ing:['Говяжий фарш 5% — 150 г','Цельнозерновая булка — 1 шт','Сыр — 1 ломтик','Салат, томат, огурец','Соус: греческий йогурт + горчица'],
+    st:['Сформируйте котлету, посолите и поперчите','Жарьте на сильном огне по 3–4 минуты с каждой стороны, в конце положите сыр','Соберите бургер с овощами и соусом'] },
+  { id:'bolo', e:'🍝', t:'Паста болоньезе из индейки', tag:'Обед и ужин', min:25, k:560, p:42, f:14, c:66,
+    ing:['Паста из твёрдых сортов — 80 г','Фарш индейки — 150 г','Томаты в собственном соку — 150 г','Лук, чеснок, базилик'],
+    st:['Отварите пасту','Обжарьте лук, чеснок и фарш 7 минут','Добавьте томаты, тушите 10 минут, смешайте с пастой'] },
+  { id:'salmon', e:'🐟', t:'Лосось с картофелем и брокколи', tag:'Обед и ужин', min:30, k:490, p:36, f:21, c:40,
+    ing:['Филе лосося — 150 г','Картофель — 200 г','Брокколи — 100 г','Лимон, соль, перец'],
+    st:['Нарежьте картофель дольками и запекайте 15 минут при 200°C','Добавьте лосось и брокколи на тот же противень','Запекайте ещё 12 минут, сбрызните лимоном'] },
+  { id:'steak', e:'🥩', t:'Стейк с овощами гриль', tag:'Обед и ужин', min:20, k:470, p:54, f:22, c:12,
+    ing:['Говядина (вырезка или стриплойн) — 200 г','Перец, кабачок, шампиньоны — 200 г','Оливковое масло — 1 ч. л.','Соль, перец, розмарин'],
+    st:['Достаньте мясо из холодильника за 20 минут','Жарьте на раскалённой сковороде по 3–4 минуты с каждой стороны','Дайте мясу отдохнуть 5 минут, пока жарятся овощи'] },
+  { id:'shawarma', e:'🌯', t:'Домашняя шаурма', tag:'Обед и ужин', min:20, k:400, p:44, f:6, c:40,
+    ing:['Тонкий лаваш — 60 г','Куриная грудка — 150 г','Огурец, томат, капуста — 100 г','Соус: греческий йогурт + чеснок + укроп'],
+    st:['Обжарьте курицу с паприкой и куркумой','Смажьте лаваш соусом, выложите курицу и овощи','Сверните и прогрейте на сухой сковороде до хруста'] },
+  { id:'shrimp', e:'🍤', t:'Креветки с чесноком и булгуром', tag:'Обед и ужин', min:15, k:440, p:47, f:7, c:47,
+    ing:['Креветки очищенные — 200 г','Булгур — 60 г сухого','Чеснок — 2 зубчика','Оливковое масло — 1 ч. л., лимон, зелень'],
+    st:['Отварите булгур 12 минут','Обжарьте чеснок 30 секунд, добавьте креветки на 3 минуты','Подавайте с лимоном и зеленью'] },
+  { id:'poke', e:'🍱', t:'Поке с тунцом', tag:'Обед и ужин', min:15, k:480, p:38, f:10, c:55,
+    ing:['Рис — 60 г сухого','Тунец в собственном соку — 1 банка','Огурец, эдамаме — 100 г','Авокадо — 1/4','Соевый соус, кунжут'],
+    st:['Отварите и остудите рис','Выложите в миску рис, тунец, овощи и авокадо','Полейте соевым соусом, посыпьте кунжутом'] },
+  { id:'chili', e:'🌶', t:'Чили кон карне', tag:'Обед и ужин', min:30, k:360, p:40, f:9, c:25,
+    ing:['Говяжий фарш 5% — 150 г','Красная фасоль — 100 г','Томаты — 200 г','Лук, чеснок, паприка, чили'],
+    st:['Обжарьте лук и фарш','Добавьте томаты, специи и фасоль','Тушите 15 минут. Удобно готовить на 3–4 дня'] },
+  { id:'nuggets', e:'🍗', t:'Наггетсы в духовке', tag:'Обед и ужин', min:25, k:415, p:54, f:9, c:26,
+    ing:['Куриная грудка — 200 г','Яйцо — 1 шт','Кукурузные хлопья без сахара — 30 г','Паприка, чеснок'],
+    st:['Нарежьте курицу кусочками','Обмакните в яйцо, затем в измельчённые хлопья со специями','Запекайте 18 минут при 200°C'] },
+  { id:'yogurt', e:'🍯', t:'Йогурт с орехами и мёдом', tag:'Перекус', min:2, k:270, p:22, f:11, c:17,
+    ing:['Греческий йогурт — 200 г','Орехи — 15 г','Мёд — 1 ч. л.'],
+    st:['Выложите йогурт в миску','Добавьте орехи и мёд'] },
+  { id:'mousse', e:'🍫', t:'Шоколадный творожный мусс', tag:'Сладкое', min:5, k:250, p:37, f:4, c:14,
+    ing:['Творог 0–2% — 200 г','Какао — 10 г','Подсластитель по вкусу','Ягоды для подачи'],
+    st:['Взбейте творог с какао и подсластителем блендером до гладкости','Охладите 15 минут, подавайте с ягодами'] }
+];
+const REC_TAGS = ['Все','Завтрак','Обед и ужин','Перекус','Сладкое'];
+const FOODS = {
+  'Мясо и рыба': [['Куриная грудка',113,24,2,0],['Куриное бедро без кожи',185,19,12,0],['Индейка, филе',114,24,2,0],['Говядина постная',158,22,7,0],['Фарш говяжий 5%',137,21,5,0],['Свинина, вырезка',142,22,5,0],['Лосось',208,20,13,0],['Тунец в собственном соку',96,21,1,0],['Креветки',95,20,2,0],['Треска',69,16,1,0]],
+  'Молочное и яйца': [['Яйцо (1 шт ≈ 55 г)',157,13,11,1],['Творог 5%',121,17,5,2],['Творог 0%',71,17,0,1],['Греческий йогурт 2%',73,10,2,4],['Скир',63,11,0,4],['Кефир 1%',40,3,1,4],['Молоко 2,5%',52,3,3,5],['Сыр твёрдый',350,25,27,0]],
+  'Крупы и гарниры': [['Гречка (сухая)',313,13,3,62],['Рис белый (сухой)',344,7,1,79],['Овсяные хлопья',352,12,6,60],['Булгур (сухой)',342,12,1,58],['Паста (сухая)',337,11,1,70],['Картофель',77,2,0,16],['Хлеб цельнозерновой',247,13,3,41],['Лаваш тонкий',236,8,1,48]],
+  'Овощи и фрукты': [['Брокколи',34,3,0,7],['Огурец',15,1,0,3],['Помидор',20,1,0,4],['Авокадо',160,2,15,9],['Банан',89,1,0,23],['Яблоко',52,0,0,14],['Ягоды',57,1,0,14],['Фасоль консервированная',99,7,0,16]],
+  'Перекусы': [['Миндаль',579,21,50,22],['Грецкий орех',654,15,65,14],['Арахисовая паста',588,25,50,20],['Протеиновый батончик',350,30,10,35],['Тёмный шоколад 70%',598,8,43,46],['Мёд',304,0,0,82]],
+  'Фастфуд и напитки': [['Бургер из фастфуда',260,13,12,26],['Картофель фри',312,3,15,41],['Пицца пепперони',298,12,13,34],['Пиво светлое (100 мл)',43,1,0,4],['Вино сухое (100 мл)',70,0,0,3],['Кола (100 мл)',42,0,0,11]]
+};
+const SWAPS = [
+  ['🍟','Картофель фри','Картофель, запечённый с паприкой','примерно в 2 раза меньше калорий'],
+  ['🥤','Сладкая газировка','Газировка без сахара или вода с лимоном','0 вместо 210 ккал за банку 0,5'],
+  ['🥫','Майонез','Греческий йогурт с чесноком и зеленью','в 9 раз меньше калорий'],
+  ['🍺','Пиво 0,5','Бокал сухого вина или крепкое без сладкого','вдвое меньше калорий'],
+  ['🍫','Молочная шоколадка','2–3 дольки тёмного шоколада','сладкое закрыто, минус 400 ккал'],
+  ['🥖','Белый батон','Цельнозерновой хлеб или лаваш','дольше сытно, меньше тянет на перекус']
+];
+let foodTab='plan', recTag='Все', recOpen=null, foodQ='', foodCat='Мясо и рыба';
 function vFood(){
   if(quiz && quiz.type==='food') return vQuiz();
+  if(recOpen) return vRecipe(RECIPES.find(r=>r.id===recOpen));
+  let h=`<h1>Питание</h1><div class="mute" style="margin-top:4px">Вкусно, сытно и без жёстких диет</div>
+  <div class="seg" style="margin:16px 0 14px">${[['plan','Мой план'],['rec','Рецепты'],['prod','Продукты']].map(([k,t])=>`<button class="${foodTab===k?'on':''}" onclick="foodTab='${k}';render()">${t}</button>`).join('')}</div>`;
+  if(foodTab==='rec') return h+vRecipes();
+  if(foodTab==='prod') return h+vProducts();
   const r=S.food;
-  let h=`<h1>Питание</h1><div class="mute" style="margin-top:4px">Без жёстких диет: простые правила под вашу цель</div>`;
   if(r && FOOD_RESULTS[r.goal]) h+=foodResult(r); else
-    h+=`<div class="card result-hero fade" style="margin-top:16px"><span style="font-size:36px">🥗</span><h3 style="margin:8px 0 4px;font-size:19px">План питания за 1 минуту</h3><div class="mute small">5 вопросов — и вы получите понятный план: что класть в тарелку и что поменять в первую очередь</div><button class="btn" style="margin-top:14px" onclick="startFood()">Пройти тест</button></div>`;
+    h+=`<div class="card result-hero fade"><span style="font-size:36px">🥗</span><h3 style="margin:8px 0 4px;font-size:19px">План питания за 1 минуту</h3><div class="mute small">5 вопросов — и вы получите понятный план: что класть в тарелку и что поменять в первую очередь</div><button class="btn" style="margin-top:14px" onclick="startFood()">Пройти тест</button></div>`;
+  h+=`<h2>Умные замены</h2><div class="card list" style="padding:2px 16px">`+SWAPS.map(s=>`<div class="row" style="padding:12px 0;border-bottom:1px solid var(--line);gap:12px;align-items:flex-start"><span style="font-size:24px">${s[0]}</span><div style="flex:1"><div class="small"><s class="dim">${s[1]}</s> → <b>${s[2]}</b></div><div class="xs" style="color:var(--lime);margin-top:3px">${s[3]}</div></div></div>`).join('')+'</div>';
   h+=`<h2>Полезно знать</h2>`+TIPS.map(t=>`<div class="card tip tight"><span class="e">${t[0]}</span><div class="small" style="padding-top:3px">${t[1]}</div></div>`).join('');
   return h;
+}
+function vRecipes(){
+  const list=RECIPES.filter(r=>recTag==='Все'||r.tag===recTag);
+  return `<div class="chips" style="margin-bottom:14px">${REC_TAGS.map(t=>`<button class="chip ${recTag===t?'on':''}" onclick="recTag='${t}';haptic('sel');render()">${t}</button>`).join('')}</div>
+  <div class="grid2">${list.map(r=>`<button class="tile" style="min-height:150px" onclick="recOpen='${r.id}';haptic('sel');render();window.scrollTo(0,0)">
+    <span style="font-size:38px">${r.e}</span><div><b style="display:block;line-height:1.25">${r.t}</b>
+    <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><span class="pill lime" style="padding:3px 8px">${r.k} ккал</span><span class="pill ice" style="padding:3px 8px">Б ${r.p}</span></div></div></button>`).join('')}</div>
+  <div class="xs dim" style="text-align:center;margin-top:12px">КБЖУ примерные, на одну порцию</div>`;
+}
+function vRecipe(r){
+  const tot=r.p*4+r.f*9+r.c*4, bar=(v,m,col)=>`<div style="flex:${Math.max(v*m,1)};background:${col};height:100%"></div>`;
+  return `<button class="back" onclick="recOpen=null;render()">‹ Все рецепты</button>
+  <div style="font-size:64px;line-height:1">${r.e}</div><h1 style="font-size:25px;margin:10px 0 6px">${r.t}</h1>
+  <div class="row" style="gap:8px"><span class="pill">⏱ ${r.min} мин</span><span class="pill">${r.tag}</span></div>
+  <div class="card" style="margin-top:14px"><div class="row between" style="align-items:flex-end"><div><div class="xs dim">НА ПОРЦИЮ</div><div class="big-delta" style="color:var(--lime)">${r.k} <span style="font-size:16px;color:var(--mute)">ккал</span></div></div></div>
+    <div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin:14px 0 10px;gap:2px">${bar(r.p,4,'#5fd0ff')}${bar(r.f,9,'#ffb648')}${bar(r.c,4,'#c6f432')}</div>
+    <div class="grid3" style="text-align:center"><div><b style="font-size:20px;color:#5fd0ff">${r.p} г</b><div class="xs mute">белки</div></div><div><b style="font-size:20px;color:#ffb648">${r.f} г</b><div class="xs mute">жиры</div></div><div><b style="font-size:20px;color:var(--lime)">${r.c} г</b><div class="xs mute">углеводы</div></div></div></div>
+  <div class="card"><h3>Ингредиенты</h3><ul class="steps ok" style="margin-top:12px">${r.ing.map(x=>`<li class="small">${x}</li>`).join('')}</ul></div>
+  <div class="card"><h3>Как готовить</h3><ul class="steps" style="margin-top:12px">${r.st.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+  <div class="xs dim" style="text-align:center">КБЖУ примерные: зависят от продуктов и порции</div>`;
+}
+function vProducts(){
+  const q=foodQ.trim().toLowerCase();
+  const rows=q ? Object.values(FOODS).flat().filter(x=>x[0].toLowerCase().indexOf(q)>=0) : FOODS[foodCat];
+  return `<input id="fq" value="${esc(foodQ)}" placeholder="🔎  Найти продукт" oninput="foodQ=this.value;clearTimeout(window._fq);window._fq=setTimeout(()=>{render();const i=$('#fq');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250)" style="width:100%;height:46px;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:0 14px;outline:none;margin-bottom:12px">
+  ${q?'':`<div class="chips" style="margin-bottom:12px">${Object.keys(FOODS).map(c=>`<button class="chip ${foodCat===c?'on':''}" onclick="foodCat='${c}';haptic('sel');render()">${c}</button>`).join('')}</div>`}
+  <div class="card" style="padding:4px 16px"><div class="row xs dim" style="padding:10px 0;border-bottom:1px solid var(--line)"><span style="flex:1">на 100 г</span><span style="width:52px;text-align:right">ккал</span><span style="width:92px;text-align:right">Б / Ж / У</span></div>
+  ${rows.length?rows.map(x=>`<div class="row" style="padding:11px 0;border-bottom:1px solid var(--line)"><span class="small" style="flex:1">${x[0]}</span><b style="width:52px;text-align:right;color:${x[1]>300?'var(--warn)':x[1]<100?'var(--lime)':'var(--text)'}">${x[1]}</b><span class="xs mute" style="width:92px;text-align:right">${x[2]} / ${x[3]} / ${x[4]}</span></div>`).join(''):'<div class="small mute" style="padding:14px 0">Ничего не нашлось</div>'}</div>
+  <div class="xs dim" style="text-align:center">Значения примерные, по справочным таблицам</div>`;
 }
 function foodResult(a){ const R=FOOD_RESULTS[a.goal]; const extra=[];
   ['meals','when','weak','act'].forEach(k=>{ const m=FOOD_EXTRA[k]; if(m&&m[a[k]]) extra.push(m[a[k]]); });
@@ -759,7 +862,7 @@ function render(){
 }
 async function init(){
   if(tg){ try{ tg.ready(); tg.expand(); tg.setHeaderColor('#0c0d10'); tg.setBackgroundColor('#0c0d10'); if(tg.disableVerticalSwipes) tg.disableVerticalSwipes();
-    tg.BackButton.onClick(()=>{ if(document.querySelector('#sheet.open')) return closeSheet(); if(quiz) return quizBack(); if(sub&&page==='care') return go('care'); go('home'); }); }catch(e){} }
+    tg.BackButton.onClick(()=>{ if(document.querySelector('#sheet.open')) return closeSheet(); if(quiz) return quizBack(); if(sub&&page==='care') return go('care'); if(recOpen){ recOpen=null; return render(); } go('home'); }); }catch(e){} }
   render();
   try{ S=await api('me',{}); }
   catch(e){ $('#app').innerHTML=`<div style="text-align:center;padding:60px 20px"><div style="font-size:48px">📡</div><h3 style="margin:12px 0 6px">Не получилось загрузить</h3><div class="mute small">Проверьте интернет и откройте ещё раз</div><button class="btn" style="margin-top:20px" onclick="location.reload()">Обновить</button></div>`; return; }
