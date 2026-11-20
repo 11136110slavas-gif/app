@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Культ тела</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{
   --bg:#0c0d10; --card:#16181d; --card2:#1d2027; --line:#262a33;
@@ -284,8 +283,48 @@ const CONTACTS = { 'Москва':'k_t_76', 'Питер':'k_t_776' };
 const ACC = { 'E':'emc_76', 'КТ|Москва':'k_t_76', 'КТ|Питер':'k_t_776' };
 
 /* ============================== ДАННЫЕ ============================== */
-const tg = window.Telegram && Telegram.WebApp;
-const DEMO = !tg || !tg.initData || location.search.indexOf('demo') >= 0;
+let tg = null;
+const DEMO = location.search.indexOf('demo') >= 0;
+let NO_TG = false;
+/* Скрипт Telegram грузим сами: если telegram.org недоступен (у клиента без VPN), работаем через свою замену */
+function tgShim(){
+  const hp = new URLSearchParams((location.hash||'').slice(1));
+  let raw = hp.get('tgWebAppData') || '';
+  try{ if(raw) sessionStorage.setItem('kt_init', raw); else raw = sessionStorage.getItem('kt_init') || ''; }catch(e){}
+  if(!raw) return null;
+  const q = new URLSearchParams(raw); let user = {};
+  try{ user = JSON.parse(q.get('user')||'{}'); }catch(e){}
+  const post = (type, data)=>{ try{
+    if(window.TelegramWebviewProxy) window.TelegramWebviewProxy.postEvent(type, JSON.stringify(data||{}));
+    else if(window.external && window.external.notify) window.external.notify(JSON.stringify({eventType:type, eventData:data||{}}));
+    else window.parent.postMessage(JSON.stringify({eventType:type, eventData:data||{}}), '*');
+  }catch(e){} };
+  let backCb = null;
+  window.Telegram = window.Telegram || {};
+  window.Telegram.WebView = window.Telegram.WebView || {};
+  window.Telegram.WebView.receiveEvent = (ev)=>{ if(ev==='back_button_pressed' && backCb) backCb(); };
+  window.addEventListener('message', (e)=>{ try{ const m = JSON.parse(e.data); if(m.eventType==='back_button_pressed' && backCb) backCb(); }catch(x){} });
+  return {
+    initData: raw, initDataUnsafe: { user: user, start_param: q.get('start_param') || '' },
+    ready(){ post('web_app_ready'); }, expand(){ post('web_app_expand'); },
+    setHeaderColor(c){ post('web_app_set_header_color', {color:c}); }, setBackgroundColor(c){ post('web_app_set_background_color', {color:c}); },
+    disableVerticalSwipes(){ post('web_app_setup_swipe_behavior', {allow_vertical_swipe:false}); },
+    openTelegramLink(u){ const path = u.replace(/^https?:\/\/t\.me/, ''); if(window.TelegramWebviewProxy || window.parent!==window) post('web_app_open_tg_link', {path_full: path}); else location.href = u; },
+    BackButton: { onClick(f){ backCb = f; }, show(){ post('web_app_setup_back_button', {is_visible:true}); }, hide(){ post('web_app_setup_back_button', {is_visible:false}); } },
+    HapticFeedback: { impactOccurred(s){ post('web_app_trigger_haptic_feedback', {type:'impact', impact_style:s}); }, notificationOccurred(s){ post('web_app_trigger_haptic_feedback', {type:'notification', notification_type:s}); }, selectionChanged(){ post('web_app_trigger_haptic_feedback', {type:'selection_change'}); } }
+  };
+}
+function loadTg(){
+  return new Promise(res=>{
+    let done = false;
+    const finish = ()=>{ if(done) return; done = true; const w = window.Telegram && window.Telegram.WebApp; res(w && w.initData ? w : tgShim()); };
+    const sc = document.createElement('script');
+    sc.src = 'https://telegram.org/js/telegram-web-app.js';
+    sc.onload = finish; sc.onerror = finish;
+    document.head.appendChild(sc);
+    setTimeout(finish, 2500);
+  });
+}
 let S = null;            // состояние с сервера
 let page = 'home', sub = null, quiz = null, book = null, progTab = 'weight';
 const params = new URLSearchParams(location.search);
@@ -861,8 +900,10 @@ function render(){
   setBack(page!=='home');
 }
 async function init(){
+  if(!DEMO){ tg = await loadTg(); NO_TG = !tg || !tg.initData; }
   if(tg){ try{ tg.ready(); tg.expand(); tg.setHeaderColor('#0c0d10'); tg.setBackgroundColor('#0c0d10'); if(tg.disableVerticalSwipes) tg.disableVerticalSwipes();
     tg.BackButton.onClick(()=>{ if(document.querySelector('#sheet.open')) return closeSheet(); if(quiz) return quizBack(); if(sub&&page==='care') return go('care'); if(recOpen){ recOpen=null; return render(); } go('home'); }); }catch(e){} }
+  if(NO_TG){ $('#app').innerHTML=`<div style="text-align:center;padding:60px 20px"><div style="font-size:48px">📱</div><h3 style="margin:12px 0 6px">Откройте приложение в Telegram</h3><div class="mute small" style="margin-bottom:18px">Зайдите в бота @kult_tela_clients_bot и нажмите кнопку «Открыть» внизу чата. Если не открывается, обновите Telegram до последней версии</div><a class="btn" href="https://t.me/kult_tela_clients_bot">Перейти в бота</a></div>`; return; }
   render();
   try{ S=await api('me',{}); }
   catch(e){ $('#app').innerHTML=`<div style="text-align:center;padding:60px 20px"><div style="font-size:48px">📡</div><h3 style="margin:12px 0 6px">Не получилось загрузить</h3><div class="mute small">Проверьте интернет и откройте ещё раз</div><button class="btn" style="margin-top:20px" onclick="location.reload()">Обновить</button></div>`; return; }
