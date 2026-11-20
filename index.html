@@ -498,7 +498,8 @@ function vGuest(){
     <div class="mute small">Записи, напоминания, вода, питание и ваш прогресс — в одном месте. Записи появятся здесь после первого визита</div>
     <button class="btn" style="margin-top:16px" onclick="startPick()">Подобрать процедуру</button></div>
     <h3 style="margin:4px 0 10px">Записаться на первый визит</h3><div class="grid2"><button class="btn ghost" onclick="openChat('${CONTACTS['Москва']}')">📍 Москва</button><button class="btn ghost" onclick="openChat('${CONTACTS['Питер']}')">📍 Питер</button></div>
-    <div class="card" style="margin-top:12px"><div class="small mute">Уже были у нас, но здесь пусто? Проверьте, что в Telegram у вас стоит ник (имя пользователя), и напишите специалисту, и мы привяжем ваши записи</div></div>
+    <div class="card" style="margin-top:12px"><div class="small mute">Уже были у нас, но здесь пусто? Укажите день и примерное время визита, специалист найдёт вас в журнале и привяжет ваши записи</div>
+      <button class="btn sm ghost" style="margin-top:12px" onclick="openLink()">Найти мои записи</button></div>
     <div class="grid2"><button class="tile" onclick="go('water')"><span class="ic">💧</span><div><b>Вода</b><br><span>норма и трекер</span></div></button>
     <button class="tile" onclick="go('food')"><span class="ic">🥗</span><div><b>Питание</b><br><span>план под цель</span></div></button></div>`
     + ((S.promos||[]).length ? `<h2>Акции</h2>` + S.promos.map(o => offerCard(o, 'Хочу', true)).join('') : '');
@@ -886,6 +887,24 @@ function openCert(){
 }
 async function sendCert(){ if(!window._cert){ toast('Выберите вариант'); return; } closeSheet(); haptic('ok'); toast('Заявка отправлена, скоро напишу');
   try{ await api('cert',{v:window._cert}); }catch(e){} }
+
+function openLink(){
+  const today=new Date().toISOString().slice(0,10); window._lst=window._lst||'';
+  const fld='width:100%;margin-top:8px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);font-size:17px';
+  sheet(`<h3>Найти мои записи</h3><div class="mute small" style="margin-top:4px">Когда вы были у нас последний раз? Специалист сверит с журналом и привяжет записи к этому аккаунту</div>
+   <div class="xs dim" style="margin-top:16px">СТУДИЯ</div>
+   <div class="chips" style="margin:8px 0 0">${['Москва','Питер'].map(x=>`<button class="chip${window._lst===x?' on':''}" onclick="document.querySelectorAll('#sheet .chip').forEach(c=>c.classList.remove('on'));this.classList.add('on');window._lst='${x}'">${x}</button>`).join('')}</div>
+   <div class="xs dim" style="margin-top:16px">ДЕНЬ ВИЗИТА</div><input id="lkd" type="date" max="${today}" value="${today}" style="${fld}">
+   <div class="xs dim" style="margin-top:16px">ПРИМЕРНОЕ ВРЕМЯ (если помните)</div><input id="lkt" type="time" style="${fld}">
+   <button class="btn" style="margin-top:20px" onclick="sendLink()">Отправить</button>`);
+}
+async function sendLink(){
+  const d=($('#lkd')||{}).value, t=($('#lkt')||{}).value||'';
+  if(!window._lst){ toast('Выберите студию'); return; }
+  if(!d){ toast('Укажите день визита'); return; }
+  closeSheet(); haptic('ok'); toast('Отправил, специалист проверит и привяжет записи');
+  try{ await api('link',{studio:window._lst, date:d, time:t}); }catch(e){}
+}
 
 /* ============================== ШТОРКА ============================== */
 function sheet(html){ $('#sheet').innerHTML='<div class="grab"></div>'+html; $('#sheetBg').style.display='block'; requestAnimationFrame(()=>{ $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); }); }
