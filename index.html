@@ -819,6 +819,7 @@ function suggestDate(){ const c=S.client, cat=book&&book.cat, iv=(S.intervals||{
   if(!c||!c.last||!iv) return ''; const d=new Date(pd(c.last.date).getTime()+iv*864e5); const s=d.toISOString().slice(0,10);
   return dayDiff(s)>0 ? s : 'now'; }
 function vBook(){
+  if(!book){ if(!S.client){ page='home'; return vHome(); } book={ cat:null, days:[], time:null, comment:'', reschedule:false, next:false, wait:false, done:false }; }
   const b=book, c=S.client;
   if(b.done) return `<div style="text-align:center;padding:40px 10px" class="fade"><div style="font-size:64px">✅</div><h1 style="margin:14px 0 8px">Заявка у меня</h1>
     <div class="mute">Подберу время и напишу вам в Telegram${inWork()?' в ближайшие минуты':' утром, с 9:00'}</div>
